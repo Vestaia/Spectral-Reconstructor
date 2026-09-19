@@ -7,7 +7,7 @@ This is an Open Tablet Driver plugin based on spectral filtering. Noise has roug
 - Reconstructive resampler (not interpolation), creates accurate trajectories without requiring a buffer or prediction. 
 
 ## Usage
-Use with Open Tablet Driver 0.6.7 or newer, place the [plugin](https://github.com/Vestaia/ThePerfectFilter/releases/download/v1.0.0/AA.ThePerfectFilter.dll) at C:\Users\<your username>\AppData\Local\OpenTabletDriver\Plugins\ and enable in your filters menu.
+Use with Open Tablet Driver 0.6.7 or newer, place the [plugin](https://github.com/Vestaia/ThePerfectFilter/releases/download/v1.0.0/AA.ThePerfectFilter.dll) at `C:\Users\<your username>\AppData\Local\OpenTabletDriver\Plugins\` and enable in your filters menu.
 
 ## Filter Design
 
