@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>AA.ThePerfectFilter</AssemblyName>
+
+    <!-- OTD supplies its own assemblies at runtime. Keep the plugin output self-contained
+         as one managed plugin DLL by compiling the filter core directly into this assembly. -->
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="OpenTabletDriver.Plugin" Version="0.6.7" PrivateAssets="all" />
+
+    <!-- Compile the shared filter implementation directly into the OTD plugin assembly. -->
+    <Compile Include="..\TrajectoryEigenFilterCore\ComplexityModel.cs" Link="Core\ComplexityModel.cs" />
+    <Compile Include="..\TrajectoryEigenFilterCore\FilterSettings.cs" Link="Core\FilterSettings.cs" />
+    <Compile Include="..\TrajectoryEigenFilterCore\SymmetricEigen.cs" Link="Core\SymmetricEigen.cs" />
+    <Compile Include="..\TrajectoryEigenFilterCore\TrajectoryFilter.cs" Link="Core\TrajectoryFilter.cs" />
+  </ItemGroup>
+</Project>
