@@ -16,9 +16,6 @@ internal static class SymmetricEigen
             int p=0,q=1; double max=0;
             for(int i=0;i<n;i++) for(int j=i+1;j<n;j++)
             { var z=Math.Abs(a[i,j]); if(z>max){max=z;p=i;q=j;} }
-            // The spectrum can span many orders of magnitude.  The previous 1e-13
-            // relative cutoff stopped while off-diagonal terms were still comparable
-            // to the smallest useful eigenvalues.  Continue close to double precision.
             if(max < 2e-15 * Math.Max(1.0, MaxDiagonal(a))) break;
             double app=a[p,p], aqq=a[q,q], apq=a[p,q];
             double phi=0.5*Math.Atan2(2*apq, aqq-app);
