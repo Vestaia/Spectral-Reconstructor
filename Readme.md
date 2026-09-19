@@ -14,7 +14,7 @@ The defaults are optimized for 700hz custom Wacom firmware. I would recommend us
 | Parameter | Symbol | Default | Effect on output |
 |---|---:|---:|---|
 | Window duration | $T_w$ | 100 ms | Sets the amount of position history used to construct the reconstruction. Longer windows provide more temporal context and finer modal resolution, while shorter windows make the model more local in time. |
-| Maximum derivative order | $M$ | 8 | Used for constructing DCT eigenbasis, order influences eigenvalues |
+| Maximum derivative order | $M$ | 8 | Sets maximum order for the finite differences operators used for constructing DCT eigenbasis. Maximum order influences eigenvalues. No reason to change this. |
 | Lambda cutoff | $\lambda_{\mathrm{fixed}}$ | 1.50 | Sets the maximum eigenvalue retained when adaptive lambda is disabled. Lower values retain fewer modes and reject more noise but increase reconstruction error and implicit delay. Higher values retain more modes, improving endpoint tracking at the cost of admitting more noise. |
 | Latency | $T_L$ | 5 ms | Sets how long output is delayed so that later samples can contribute to reconstruction of the reported position. Increasing latency generally permits substantially stronger noise rejection for the same trajectory accuracy. Zero latency forces reconstruction at the newest available sample. |
 | Outlier threshold | $Z_{\mathrm{outlier}}$ | 6 | Sets the threshold for rejecting isolated position deviations classified as outliers. Lower values reject smaller deviations more aggressively; higher values restrict replacement to more extreme deviations. |
