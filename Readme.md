@@ -10,7 +10,7 @@ This is an Open Tablet Driver plugin based on spectral filtering. Noise has roug
 Use with Open Tablet Driver 0.6.7 or newer, place the [plugin](https://github.com/Vestaia/ThePerfectFilter/releases/download/v1.0.0/AA.ThePerfectFilter.dll) at `C:\Users\<your username>\AppData\Local\OpenTabletDriver\Plugins\` and enable in your filters menu.
 
 ## Parameters
-
+The defaults are optimized for 700hz custom Wacom firmware. I would recommend using the custom firmware if available for your tablet.
 | Parameter | Symbol | Default | Effect on output |
 |---|---:|---:|---|
 | Window duration | $T_w$ | 100 ms | Sets the amount of position history used to construct the reconstruction. Longer windows provide more temporal context and finer modal resolution, while shorter windows make the model more local in time. |
