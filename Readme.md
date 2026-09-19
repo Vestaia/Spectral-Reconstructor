@@ -1,4 +1,4 @@
-# Mathematically Optimal Noise Rejection Filter & Resampler (Anti-Chatter)
+# Mathematically Optimal Noise Rejection (Anti-chatter) Filter & Resampler
 This is an Open Tablet Driver plugin based on spectral filtering. Noise has roughly uniform spectral power density but intended motion does not. 
 
 - Up to ~6dB noise reduction at 0 latency **without** any smoothing, averaging, or deadzones. 
