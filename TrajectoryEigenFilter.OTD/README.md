@@ -15,6 +15,6 @@ The plugin runs on OTD's fixed 1000 Hz output scheduler while estimating the tab
 
 Adaptive lambda linearly interpolates between the latency anchors. At 20 ms and above the 20 ms value is used. Turning adaptive lambda off makes the normal Lambda cutoff setting authoritative.
 
-Negative latency and extrapolation are intentionally disabled: the DCT-like finite-window boundary reflects rather than providing useful prediction. The fixed 1000 Hz scheduler still interpolates within the reconstructed trajectory for resampling.
+Latency is clamped to 0–20 ms. The fixed 1000 Hz scheduler interpolates within the reconstructed trajectory when buffered samples are available and linearly extrapolates the latest reconstructed segment when the scheduler runs ahead of the newest tablet report. Extrapolation is automatic and is not exposed as a separate option.
 
 Model construction occurs off the realtime path and the previous model remains active until its replacement is ready. CSV logging is intended for diagnostics only.

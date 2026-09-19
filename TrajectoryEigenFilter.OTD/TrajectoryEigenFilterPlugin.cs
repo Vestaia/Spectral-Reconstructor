@@ -72,7 +72,7 @@ public sealed class TrajectoryEigenFilterPlugin : AsyncPositionedPipelineElement
     [Property("Outlier threshold"), DefaultPropertyValue(6.0), ToolTip("Robust residual threshold for isolated bad samples.\nDefault: 6. Recommended: 5-8.\nLower values reject more aggressively; higher values reserve replacement for more extreme excursions.")]
     public double OutlierThreshold { get; set; } = 6.0;
 
-    [Property("Latency"), Unit("ms"), DefaultPropertyValue(5.0), ToolTip("Look-ahead/buffer before output.\nDefault: 5 ms. Recommended: 0-20 ms.\nMore look-ahead reduces boundary error and permits stronger noise rejection; 0 ms prioritizes minimum latency. Negative values are disabled because the DCT-like boundary does not provide meaningful prediction.")]
+    [Property("Latency"), Unit("ms"), DefaultPropertyValue(5.0), ToolTip("Look-ahead/buffer before output.\nDefault: 5 ms. Recommended: 0-20 ms.\nMore look-ahead reduces boundary error and permits stronger noise rejection. At 0 ms, the 1000 Hz scheduler linearly extrapolates the latest reconstructed trajectory between tablet reports. Latency is clamped to a minimum of 0 ms.")]
     public double LatencyMs { get; set; } = 5.0;
 
     [BooleanProperty("Use adaptive lambda", "Selects the hard lambda cutoff from the configured latency schedule."), DefaultPropertyValue(true), ToolTip("Uses a latency-dependent hard lambda cutoff.\nDefault: On. Recommended: On.\nTurn off to use Lambda cutoff directly at every latency.")]
@@ -161,8 +161,10 @@ public sealed class TrajectoryEigenFilterPlugin : AsyncPositionedPipelineElement
                 double deltaFromNewestMs = requestedWallMs - latestInputWallMs;
                 lastEvalIndex = (filter.WindowSamples - 1) + deltaFromNewestMs * filter.SampleRateHz / 1000.0;
 
-                double clamped = Math.Clamp(lastEvalIndex, 0, filter.WindowSamples - 1);
-                lastEvalIndex = clamped;
+                // Clamp only the historical side. At zero/small latency the 1000 Hz
+                // scheduler may run ahead of the newest tablet report; At(double) then
+                // linearly extrapolates the last reconstructed segment until new input arrives.
+                lastEvalIndex = Math.Max(0.0, lastEvalIndex);
                 output = latestWindow.At(lastEvalIndex);
             }
 

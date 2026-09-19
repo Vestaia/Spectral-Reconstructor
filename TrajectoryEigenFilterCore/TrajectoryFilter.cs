@@ -225,10 +225,13 @@ public sealed record FilteredWindow(double[] X,double[] Y,IReadOnlyList<OutlierR
     {
         if(TargetIndex is not null)return At(TargetIndex.Value);
         int n=X.Length;if(n==0)return default;if(n==1)return At(0);
-        index=Math.Clamp(index,0,n-1);
         if(index<=0)return At(0);
-        if(index>=n-1)return At(n-1);
-        int i=(int)Math.Floor(index);double f=index-i;
-        return new((float)(X[i]+(X[i+1]-X[i])*f),(float)(Y[i]+(Y[i+1]-Y[i])*f));
+        if(index>=n-1)
+        {
+            double extrapolationFraction=index-(n-1);
+            return new((float)(X[n-1]+(X[n-1]-X[n-2])*extrapolationFraction),(float)(Y[n-1]+(Y[n-1]-Y[n-2])*extrapolationFraction));
+        }
+        int i=(int)Math.Floor(index);double interpolationFraction=index-i;
+        return new((float)(X[i]+(X[i+1]-X[i])*interpolationFraction),(float)(Y[i]+(Y[i+1]-Y[i])*interpolationFraction));
     }
 }
