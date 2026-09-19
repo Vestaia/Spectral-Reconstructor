@@ -344,17 +344,17 @@ z_t
 
 ## Default parameters
 
-| Parameter | Symbol | Default |
-|---|---:|---:|
-| Window duration | $T_w$ | 100 ms |
-| Maximum derivative order | $M$ | 8 |
-| Lambda cutoff | $\lambda_{\mathrm{fixed}}$ | 1.50 |
-| Latency | $T_L$ | 5 ms |
-| Outlier threshold | $Z_{\mathrm{outlier}}$ | 6 |
-| Use adaptive lambda | $A$ | True |
-| Adaptive lambda, 0 ms | $\lambda_0^{A}$ | 1.50 |
-| Adaptive lambda, 2 ms | $\lambda_2^{A}$ | 1.20 |
-| Adaptive lambda, 5 ms | $\lambda_5^{A}$ | 1.05 |
-| Adaptive lambda, 10 ms | $\lambda_{10}^{A}$ | 1.04 |
-| Adaptive lambda, 20 ms | $\lambda_{20}^{A}$ | 1.03 |
-| CSV logging | — | False |
+| Parameter | Symbol | Default | Effect on output |
+|---|---:|---:|---|
+| Window duration | $T_w$ | 100 ms | Sets the amount of position history used to construct the reconstruction. Longer windows provide more temporal context and finer modal resolution, while shorter windows make the model more local in time. |
+| Maximum derivative order | $M$ | 8 | Used for constructing DCT eigenbasis, order influences eigenvalues |
+| Lambda cutoff | $\lambda_{\mathrm{fixed}}$ | 1.50 | Sets the maximum eigenvalue retained when adaptive lambda is disabled. Lower values retain fewer modes and reject more noise but increase reconstruction error and implicit delay. Higher values retain more modes, improving endpoint tracking at the cost of admitting more noise. |
+| Latency | $T_L$ | 5 ms | Sets how long output is delayed so that later samples can contribute to reconstruction of the reported position. Increasing latency generally permits substantially stronger noise rejection for the same trajectory accuracy. Zero latency forces reconstruction at the newest available sample. |
+| Outlier threshold | $Z_{\mathrm{outlier}}$ | 6 | Sets the threshold for rejecting isolated position deviations classified as outliers. Lower values reject smaller deviations more aggressively; higher values restrict replacement to more extreme deviations. |
+| Use adaptive lambda | $A$ | True | Selects whether the lambda cutoff changes with reconstruction latency. When enabled, low-latency estimates use higher cutoffs to reduce endpoint error while estimates with more future information use lower cutoffs for stronger noise rejection. When disabled, all estimates use $\lambda_{\mathrm{fixed}}$. |
+| Adaptive lambda, 0 ms | $\lambda_0^{A}$ | 1.50 | Sets the eigenvalue cutoff for reconstruction at the newest sample, where no future samples are available. This is the least aggressively filtered adaptive estimate because additional modes are required to reduce endpoint error. |
+| Adaptive lambda, 2 ms | $\lambda_2^{A}$ | 1.20 | Sets the adaptive cutoff at 2 ms of reconstruction latency. Cutoffs at intermediate latencies are interpolated between adjacent adaptive-lambda parameters. |
+| Adaptive lambda, 5 ms | $\lambda_5^{A}$ | 1.05 | Sets the adaptive cutoff at 5 ms of reconstruction latency. The additional future information allows a substantially lower-rank reconstruction than at the newest sample. |
+| Adaptive lambda, 10 ms | $\lambda_{10}^{A}$ | 1.04 | Sets the adaptive cutoff at 10 ms of reconstruction latency. The small reduction relative to the 5 ms cutoff reflects the diminishing benefit of additional look-ahead at this timescale. |
+| Adaptive lambda, 20 ms | $\lambda_{20}^{A}$ | 1.03 | Sets the adaptive cutoff at 20 ms of reconstruction latency. This is the lowest default adaptive cutoff and therefore the most aggressively filtered reconstruction in the default schedule. |
+| CSV logging | — | False | Writes filter diagnostics and position data to CSV when enabled. It does not intentionally alter the reconstructed output and is disabled by default to avoid unnecessary I/O overhead. |
