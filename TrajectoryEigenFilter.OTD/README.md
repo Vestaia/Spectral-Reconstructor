@@ -9,12 +9,13 @@ The plugin runs on OTD's fixed 1000 Hz output scheduler while estimating the tab
 - Depth / maximum finite-difference order: 8 (recommended 8)
 - Outlier threshold: 6 (recommended 5–8)
 - Latency: 5 ms (recommended 0–20 ms)
+- Staleness timeout: 25 ms
 - Adaptive lambda: enabled
 - Adaptive anchors: 0 ms 1.50; 2 ms 1.20; 5 ms 1.05; 10 ms 1.04; 20 ms 1.03
 - CSV logging: disabled
 
 Adaptive lambda linearly interpolates between the latency anchors. At 20 ms and above the 20 ms value is used. Turning adaptive lambda off makes the normal Lambda cutoff setting authoritative.
 
-Latency is clamped to 0–20 ms. The fixed 1000 Hz scheduler interpolates within the reconstructed trajectory when buffered samples are available and linearly extrapolates the latest reconstructed segment when the scheduler runs ahead of the newest tablet report. Extrapolation is automatic and is not exposed as a separate option.
+Latency is clamped to 0–20 ms. The fixed 1000 Hz scheduler interpolates within the reconstructed trajectory when buffered samples are available and linearly extrapolates the latest reconstructed segment when the scheduler runs ahead of the newest tablet report. The scheduler stops emitting after the configured staleness timeout and resumes on the next physical report, without relying on a tablet-specific out-of-range report.
 
 Model construction occurs off the realtime path and the previous model remains active until its replacement is ready. CSV logging is intended for diagnostics only.

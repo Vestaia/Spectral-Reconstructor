@@ -75,6 +75,9 @@ public sealed class TrajectoryEigenFilterPlugin : AsyncPositionedPipelineElement
     [Property("Latency"), Unit("ms"), DefaultPropertyValue(5.0), ToolTip("Look-ahead/buffer before output.\nDefault: 5 ms. Recommended: 0-20 ms.\nMore look-ahead reduces boundary error and permits stronger noise rejection. At 0 ms, the 1000 Hz scheduler linearly extrapolates the latest reconstructed trajectory between tablet reports. Latency is clamped to a minimum of 0 ms.")]
     public double LatencyMs { get; set; } = 5.0;
 
+    [Property("Staleness timeout"), Unit("ms"), DefaultPropertyValue(25.0), ToolTip("Stops the 1000 Hz output scheduler when no physical tablet report has arrived for this long.\nDefault: 25 ms.\nThis prevents a cached in-range report from being extrapolated after the pen leaves proximity. Output resumes on the next physical report.")]
+    public double StalenessTimeoutMs { get; set; } = 25.0;
+
     [BooleanProperty("Use adaptive lambda", "Selects the hard lambda cutoff from the configured latency schedule."), DefaultPropertyValue(true), ToolTip("Uses a latency-dependent hard lambda cutoff.\nDefault: On. Recommended: On.\nTurn off to use Lambda cutoff directly at every latency.")]
     public bool UseAdaptiveLambda { get; set; } = true;
 
@@ -144,6 +147,17 @@ public sealed class TrajectoryEigenFilterPlugin : AsyncPositionedPipelineElement
             EnsureScheduler1000Hz();
             TryFinishModelBuild();
             long now = Stopwatch.GetTimestamp();
+
+            // Some tablets leave the last ITabletReport cached when the pen exits
+            // proximity. Do not depend on an out-of-range report to stop this timer:
+            // otherwise the final reconstructed velocity is extrapolated forever.
+            lastInputStalenessMs = lastArrivalTicks==0 ? double.NaN : (now-lastArrivalTicks)*1000.0/Stopwatch.Frequency;
+            if (lastArrivalTicks!=0 && lastInputStalenessMs>=EffectiveStalenessTimeoutMs())
+            {
+                lastEvalIndex=double.NaN;
+                return;
+            }
+
             if (lastOutputTicks != 0) lastOutputIntervalMs = (now-lastOutputTicks)*1000.0/Stopwatch.Frequency;
             lastOutputTicks = now;
 
@@ -168,7 +182,6 @@ public sealed class TrajectoryEigenFilterPlugin : AsyncPositionedPipelineElement
                 output = latestWindow.At(lastEvalIndex);
             }
 
-            lastInputStalenessMs = lastArrivalTicks==0 ? double.NaN : (now-lastArrivalTicks)*1000.0/Stopwatch.Frequency;
             latestOutput = output; haveOutput = true; outputSequence++;
         }
         report.Position = output;
@@ -283,6 +296,7 @@ public sealed class TrajectoryEigenFilterPlugin : AsyncPositionedPipelineElement
 
     private static double TicksToMilliseconds(long ticks) => ticks * 1000.0 / Stopwatch.Frequency;
     private double EffectiveLatencyMs() => Math.Clamp(LatencyMs,0.0,20.0);
+    private double EffectiveStalenessTimeoutMs() => Math.Clamp(StalenessTimeoutMs,1.0,1000.0);
 
     private double EffectiveLambdaCutoff()
     {
