@@ -4,11 +4,6 @@ A perfect filter is an OpenTabletDriver trajectory filter and resampler designed
 
 Its spectral reconstruction can provide stronger noise suppression than ordinary smoothing filters at comparable latency while preserving intentional motion, including constant velocity, as an exact low-complexity trajectory.
 
-- Preserves constant-position and constant-velocity trajectories in its lowest eigenspace.
-- Supports configurable filtering strength and output latency.
-- Runs on OpenTabletDriver's 1000 Hz asynchronous output pipeline.
-- Uses linear extrapolation only when the output playback head is ahead of the latest tablet report.
-
 ## Usage
 Use with OpenTabletDriver 0.6.7 or newer. Download the plugin from the [latest release](https://github.com/Vestaia/ThePerfectFilter/releases/latest), place it in `C:\Users\<your username>\AppData\Local\OpenTabletDriver\Plugins\`, and enable it in the Filters settings.
 
