@@ -21,8 +21,8 @@ The defaults are optimized for 700hz custom Wacom firmware. I would recommend us
 | Parameter | Symbol | Default | Effect on output |
 |---|---:|---:|---|
 | Window duration | $T_w$ | 100 ms | Sets the amount of position history used to construct the reconstruction. Longer windows provide more temporal context and finer modal resolution, while shorter windows make the model more local in time. |
-| Filter strength | $s$ | 1 | Inversely scales retained modes above the affine minimum. Strength 1 uses 12 modes at zero look-ahead, 0 retains all modes, and larger values retain fewer modes. |
-| Latency | $T_L$ | 5 ms | Sets how long output is delayed so that later samples can contribute to reconstruction of the reported position. Increasing latency generally permits substantially stronger noise rejection for the same trajectory accuracy. Zero latency forces reconstruction at the newest available sample. |
+| Filter strength | $s$ | 1 | Inversely scales retained modes above the affine minimum. Strength 1 uses 12 modes at zero look-ahead, 0 retains all modes, and larger values retain fewer modes. Strength 1.5 is recommended for 133 Hz tablets. |
+| Latency | $r$ | 4 samples | Sets how many input samples are buffered before output so later samples can contribute to reconstruction. Expressing latency in samples keeps reconstruction support consistent across tablet report rates. Zero latency forces reconstruction at the newest available sample. |
 | Staleness timeout | $T_S$ | 25 ms | Stops emitting output when no physical tablet report has arrived for this long. This prevents continued extrapolation when a tablet leaves its last in-range report cached after the pen is lifted. Output resumes with the next physical report. |
 | Outlier threshold | $Z_{\mathrm{outlier}}$ | 6 | Sets the threshold for rejecting isolated position deviations classified as outliers. Lower values reject smaller deviations more aggressively; higher values restrict replacement to more extreme deviations. |
 | Use adaptive modes | $A$ | True | Selects whether retained mode count follows the sample-look-ahead schedule 12, 9, 8, 7, 6, then 5. The schedule is scaled by Filter strength. |
@@ -305,15 +305,14 @@ w_r
 \hat{\mathbf{x}}_t^{(r)}
 ```
 
+If the configured latency is `r_L` input samples, the repeated-estimate ensemble uses:
+
 ```math
-R =
-\mathrm{round}\!\left(
-\frac{f_s T_L}{1000}
-\right)
+R=\min\left(r_L,N-2\right)
 ```
 
 ```math
-T_L\ge0
+r_L\ge0
 ```
 
 ```math

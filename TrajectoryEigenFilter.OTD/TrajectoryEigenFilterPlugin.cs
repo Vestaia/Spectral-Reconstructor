@@ -63,7 +63,7 @@ public sealed class TrajectoryEigenFilterPlugin : AsyncPositionedPipelineElement
     [Property("Window duration"), Unit("ms"), DefaultPropertyValue(100.0), ToolTip("Trajectory history used by the filter.\nDefault: 100 ms. Recommended: 70-150 ms.\n100 ms was used for current tuning; larger windows cost more model-build CPU and memory.")]
     public double WindowMilliseconds { get; set; } = 100.0;
 
-    [Property("Filter strength"), DefaultPropertyValue(1.0), ToolTip("Inverse retained-mode control. Strength 1 uses 12 modes at zero latency; 0 retains all modes. Higher values retain fewer modes.\nDefault: 1. Recommended: 1.")]
+    [Property("Filter strength"), DefaultPropertyValue(1.0), ToolTip("Inverse retained-mode control. Strength 1 uses 12 modes at zero latency; 0 retains all modes. Higher values retain fewer modes.\nDefault: 1. Recommended: 1 for high-rate tablets; 1.5 for 133 Hz tablets.")]
     public double FilterStrength { get; set; } = 1.0;
 
     [BooleanProperty("Use adaptive modes", "Varies the retained mode count with reconstruction look-ahead."), DefaultPropertyValue(true), ToolTip("Uses the sample-look-ahead schedule 12, 9, 8, 7, 6, then 5, scaled by Filter strength.\nDefault: On. Recommended: On.")]
@@ -72,8 +72,8 @@ public sealed class TrajectoryEigenFilterPlugin : AsyncPositionedPipelineElement
     [Property("Outlier threshold"), DefaultPropertyValue(6.0), ToolTip("Robust residual threshold for isolated bad samples.\nDefault: 6. Recommended: 5-8.\nLower values reject more aggressively; higher values reserve replacement for more extreme excursions.")]
     public double OutlierThreshold { get; set; } = 6.0;
 
-    [Property("Latency"), Unit("ms"), DefaultPropertyValue(5.0), ToolTip("Look-ahead/buffer before output.\nDefault: 5 ms. Recommended: 2-20 ms.\nZero latency is fully functional but not recommended: noise rejection and input-jitter tolerance are reduced. Linear extrapolation is used if the output timer runs ahead of the latest input report.")]
-    public double LatencyMs { get; set; } = 5.0;
+    [Property("Latency"), Unit("samples"), DefaultPropertyValue(4), ToolTip("Input samples buffered before output.\nDefault: 4 samples. Recommended: 1-10 samples.\nZero latency is fully functional but not recommended: noise rejection and input-jitter tolerance are reduced. Linear extrapolation is used if the output timer runs ahead of the latest input report.")]
+    public int LatencySamples { get; set; } = 4;
 
     [Property("Staleness timeout"), Unit("ms"), DefaultPropertyValue(25.0), ToolTip("Stops the 1000 Hz output scheduler when no physical tablet report has arrived for this long.\nDefault: 25 ms.\nThis prevents a cached in-range report from being extrapolated after the pen leaves proximity. Output resumes on the next physical report.")]
     public double StalenessTimeoutMs { get; set; } = 25.0;
@@ -163,7 +163,7 @@ public sealed class TrajectoryEigenFilterPlugin : AsyncPositionedPipelineElement
             {
                 // No PLL or virtual playback clock. The output timer directly asks for
                 // the reconstructed trajectory at wall-clock (now - configured latency).
-                double requestedWallMs = TicksToMilliseconds(now) - EffectiveLatencyMs();
+                double requestedWallMs = TicksToMilliseconds(now) - EffectiveLatencySamples() * 1000.0 / filter.SampleRateHz;
                 double deltaFromNewestMs = requestedWallMs - latestInputWallMs;
                 lastEvalIndex = (filter.WindowSamples - 1) + deltaFromNewestMs * filter.SampleRateHz / 1000.0;
 
@@ -232,7 +232,7 @@ public sealed class TrajectoryEigenFilterPlugin : AsyncPositionedPipelineElement
             MaxOutlierPasses = MaximumOutlierPasses
         };
         int n = settings.WindowSamples(rate);
-        int lag = (int)Math.Round(EffectiveLatencyMs() * rate / 1000.0);
+        int lag = Math.Min(EffectiveLatencySamples(), Math.Max(0, n - 2));
         int modes = UseAdaptiveModes
             ? ComplexityModel.AdaptiveModesForLookaheadSamples(settings, lag, n)
             : ComplexityModel.ScaleModesForStrength(12, settings.AdaptiveStrength, n);
@@ -329,7 +329,7 @@ public sealed class TrajectoryEigenFilterPlugin : AsyncPositionedPipelineElement
     }
 
     private static double TicksToMilliseconds(long ticks) => ticks * 1000.0 / Stopwatch.Frequency;
-    private double EffectiveLatencyMs() => Math.Clamp(LatencyMs, 0.0, 20.0);
+    private int EffectiveLatencySamples() => Math.Clamp(LatencySamples, 0, 20);
     private double EffectiveStalenessTimeoutMs() => Math.Clamp(StalenessTimeoutMs, 1.0, 1000.0);
 
     private void AddRawHistory(Vector2 point)
