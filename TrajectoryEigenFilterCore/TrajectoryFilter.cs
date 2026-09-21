@@ -228,8 +228,17 @@ public sealed record FilteredWindow(double[] X,double[] Y,IReadOnlyList<OutlierR
         if(index<=0)return At(0);
         if(index>=n-1)
         {
-            double extrapolationFraction=index-(n-1);
-            return new((float)(X[n-1]+(X[n-1]-X[n-2])*extrapolationFraction),(float)(Y[n-1]+(Y[n-1]-Y[n-2])*extrapolationFraction));
+            double t=index-(n-1),dx=X[n-1]-X[n-2],dy=Y[n-1]-Y[n-2];
+            // Respect the DCT-II reflection boundary at N-1/2. A quadratic
+            // continuation reaches zero slope there; only later scheduler
+            // requests use the straight-line fallback for delayed input.
+            double bx=X[n-1]+dx/8.0,by=Y[n-1]+dy/8.0;
+            if(t<=0.5)
+            {
+                double q=t-t*t;
+                return new((float)(X[n-1]+0.5*dx*q),(float)(Y[n-1]+0.5*dy*q));
+            }
+            return new((float)(bx+dx*(t-0.5)),(float)(by+dy*(t-0.5)));
         }
         int i=(int)Math.Floor(index);double interpolationFraction=index-i;
         return new((float)(X[i]+(X[i+1]-X[i])*interpolationFraction),(float)(Y[i]+(Y[i+1]-Y[i])*interpolationFraction));

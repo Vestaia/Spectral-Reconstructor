@@ -4,6 +4,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AssemblyName>AA.ThePerfectFilter</AssemblyName>
+    <Version>1.0.2</Version>
 
     <!-- OTD supplies its own assemblies at runtime. Keep the plugin output self-contained
          as one managed plugin DLL by compiling the filter core directly into this assembly. -->

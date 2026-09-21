@@ -63,43 +63,27 @@ public sealed class TrajectoryEigenFilterPlugin : AsyncPositionedPipelineElement
     [Property("Window duration"), Unit("ms"), DefaultPropertyValue(100.0), ToolTip("Trajectory history used by the filter.\nDefault: 100 ms. Recommended: 70-150 ms.\n100 ms was used for current tuning; larger windows cost more model-build CPU and memory.")]
     public double WindowMilliseconds { get; set; } = 100.0;
 
-    [Property("Lambda cutoff"), DefaultPropertyValue(1.5), ToolTip("Hard eigenvalue cutoff. Modes at or below this value are retained; higher modes are rejected.\nDefault: 1.5. Recommended: about 1.0-1.5 depending on latency.\nWhen adaptive lambda is enabled this value is used only as the non-adaptive fallback.")]
-    public double LambdaCutoff { get; set; } = 1.5;
+    [Property("Filter strength"), DefaultPropertyValue(1.0), ToolTip("Inverse mode-cutoff control. 0 retains all modes and 1 reproduces the original cutoffs. Higher values exclude more modes. Adaptive cutoffs never fall below 1.03.\nDefault: 1. Recommended: 1.")]
+    public double FilterStrength { get; set; } = 1.0;
 
-    [Property("Depth"), DefaultPropertyValue(8), ToolTip("Maximum finite-difference order used to construct the complexity operator.\nDefault: 8. Recommended: 8.\nTesting found little benefit from substantially higher orders while they increase model-build cost.")]
-    public int Depth { get; set; } = 8;
+    [BooleanProperty("Use adaptive lambda", "Uses the original latency-dependent lambda ramp."), DefaultPropertyValue(true), ToolTip("Uses the calibrated 1.50, 1.20, 1.05, 1.04, 1.03 ramp, scaled by Filter strength with a hard 1.03 minimum. When disabled, Filter strength scales a fixed lambda of 1.50.\nDefault: On. Recommended: On.")]
+    public bool UseAdaptiveLambda { get; set; } = true;
 
     [Property("Outlier threshold"), DefaultPropertyValue(6.0), ToolTip("Robust residual threshold for isolated bad samples.\nDefault: 6. Recommended: 5-8.\nLower values reject more aggressively; higher values reserve replacement for more extreme excursions.")]
     public double OutlierThreshold { get; set; } = 6.0;
 
-    [Property("Latency"), Unit("ms"), DefaultPropertyValue(5.0), ToolTip("Look-ahead/buffer before output.\nDefault: 5 ms. Recommended: 0-20 ms.\nMore look-ahead reduces boundary error and permits stronger noise rejection. At 0 ms, the 1000 Hz scheduler linearly extrapolates the latest reconstructed trajectory between tablet reports. Latency is clamped to a minimum of 0 ms.")]
+    [Property("Latency"), Unit("ms"), DefaultPropertyValue(5.0), ToolTip("Look-ahead/buffer before output.\nDefault: 5 ms. Recommended: 2-20 ms.\nZero latency is fully functional but not recommended: noise rejection and input-jitter tolerance are reduced. At low latency, DCT continuation is used through the half-sample reflection boundary before linear fallback.")]
     public double LatencyMs { get; set; } = 5.0;
 
     [Property("Staleness timeout"), Unit("ms"), DefaultPropertyValue(25.0), ToolTip("Stops the 1000 Hz output scheduler when no physical tablet report has arrived for this long.\nDefault: 25 ms.\nThis prevents a cached in-range report from being extrapolated after the pen leaves proximity. Output resumes on the next physical report.")]
     public double StalenessTimeoutMs { get; set; } = 25.0;
 
-    [BooleanProperty("Use adaptive lambda", "Selects the hard lambda cutoff from the configured latency schedule."), DefaultPropertyValue(true), ToolTip("Uses a latency-dependent hard lambda cutoff.\nDefault: On. Recommended: On.\nTurn off to use Lambda cutoff directly at every latency.")]
-    public bool UseAdaptiveLambda { get; set; } = true;
-
-    [Property("Adaptive lambda - 0 ms"), DefaultPropertyValue(1.50), ToolTip("Hard lambda cutoff at 0 ms latency.\nDefault/recommended from testing: 1.50.")]
-    public double AdaptiveLambdaAt0Ms { get; set; } = 1.50;
-
-    [Property("Adaptive lambda - 2 ms"), DefaultPropertyValue(1.20), ToolTip("Hard lambda cutoff at 2 ms latency. Values between anchors are linearly interpolated.\nDefault/recommended from testing: 1.20.")]
-    public double AdaptiveLambdaAt2Ms { get; set; } = 1.20;
-
-    [Property("Adaptive lambda - 5 ms"), DefaultPropertyValue(1.05), ToolTip("Hard lambda cutoff at 5 ms latency. Values between anchors are linearly interpolated.\nDefault/recommended from testing: 1.05.")]
-    public double AdaptiveLambdaAt5Ms { get; set; } = 1.05;
-
-    [Property("Adaptive lambda - 10 ms"), DefaultPropertyValue(1.04), ToolTip("Hard lambda cutoff at 10 ms latency. Values between anchors are linearly interpolated.\nDefault/recommended starting value: 1.04.")]
-    public double AdaptiveLambdaAt10Ms { get; set; } = 1.04;
-
-    [Property("Adaptive lambda - 20 ms"), DefaultPropertyValue(1.03), ToolTip("Hard lambda cutoff at 20 ms and above. Values between anchors are linearly interpolated.\nDefault/recommended starting value: 1.03.")]
-    public double AdaptiveLambdaAt20Ms { get; set; } = 1.03;
 
     [BooleanProperty("Enable CSV logging", "Writes diagnostic data to CSV."), DefaultPropertyValue(false), ToolTip("Writes diagnostic data to CSV.\nDefault: Off. Recommended: enable only for testing and troubleshooting.")]
     public bool EnableCsvLogging { get; set; } = false;
 
     private const int MinimumDifferenceOrder = 0;
+    private const int MaximumDifferenceOrder = 8;
     private const int MaximumOutlierBlock = 3;
     private const int MaximumOutlierPasses = 2;
     private const double RateTransitionFraction = 0.10;
@@ -175,9 +159,8 @@ public sealed class TrajectoryEigenFilterPlugin : AsyncPositionedPipelineElement
                 double deltaFromNewestMs = requestedWallMs - latestInputWallMs;
                 lastEvalIndex = (filter.WindowSamples - 1) + deltaFromNewestMs * filter.SampleRateHz / 1000.0;
 
-                // Clamp only the historical side. At zero/small latency the 1000 Hz
-                // scheduler may run ahead of the newest tablet report; At(double) then
-                // linearly extrapolates the last reconstructed segment until new input arrives.
+                // Clamp only the historical side. At low latency At(double) uses
+                // the half-sample DCT-boundary continuation before its fallback.
                 lastEvalIndex = Math.Max(0.0, lastEvalIndex);
                 output = latestWindow.At(lastEvalIndex);
             }
@@ -221,10 +204,9 @@ public sealed class TrajectoryEigenFilterPlugin : AsyncPositionedPipelineElement
     private FilterSettings MakeSettings(double rate) => new()
     {
         NominalSampleRateHz=rate, WindowMilliseconds=Math.Clamp(WindowMilliseconds,10,500),
-        MinimumDifferenceOrder=MinimumDifferenceOrder, MaximumDifferenceOrder=Math.Max(MinimumDifferenceOrder,Depth),
-        LambdaCutoff=EffectiveLambdaCutoff(), UseAdaptiveLambda=UseAdaptiveLambda,
-        AdaptiveLambdaAt0Ms=Math.Max(0,AdaptiveLambdaAt0Ms), AdaptiveLambdaAt2Ms=Math.Max(0,AdaptiveLambdaAt2Ms),
-        AdaptiveLambdaAt5Ms=Math.Max(0,AdaptiveLambdaAt5Ms), AdaptiveLambdaAt10Ms=Math.Max(0,AdaptiveLambdaAt10Ms), AdaptiveLambdaAt20Ms=Math.Max(0,AdaptiveLambdaAt20Ms),
+        MinimumDifferenceOrder=MinimumDifferenceOrder, MaximumDifferenceOrder=MaximumDifferenceOrder,
+        LambdaCutoff=EffectiveLambdaCutoff(rate), UseAdaptiveLambda=UseAdaptiveLambda,
+        AdaptiveStrength=Math.Max(0,FilterStrength),
         LocalDifferenceStrength=1.0,
         OutlierThreshold=Math.Max(.5,OutlierThreshold), MaxOutlierBlock=MaximumOutlierBlock, MaxOutlierPasses=MaximumOutlierPasses
     };
@@ -272,8 +254,7 @@ public sealed class TrajectoryEigenFilterPlugin : AsyncPositionedPipelineElement
     private static bool EquivalentSettings(FilterSettings a,FilterSettings b) =>
         a.WindowMilliseconds==b.WindowMilliseconds && a.MinimumDifferenceOrder==b.MinimumDifferenceOrder &&
         a.MaximumDifferenceOrder==b.MaximumDifferenceOrder && a.LambdaCutoff==b.LambdaCutoff && a.UseAdaptiveLambda==b.UseAdaptiveLambda &&
-        a.AdaptiveLambdaAt0Ms==b.AdaptiveLambdaAt0Ms && a.AdaptiveLambdaAt2Ms==b.AdaptiveLambdaAt2Ms && a.AdaptiveLambdaAt5Ms==b.AdaptiveLambdaAt5Ms &&
-        a.AdaptiveLambdaAt10Ms==b.AdaptiveLambdaAt10Ms && a.AdaptiveLambdaAt20Ms==b.AdaptiveLambdaAt20Ms && a.LocalDifferenceStrength==b.LocalDifferenceStrength &&
+        a.AdaptiveStrength==b.AdaptiveStrength && a.LocalDifferenceStrength==b.LocalDifferenceStrength &&
         a.OutlierThreshold==b.OutlierThreshold &&
         a.MaxOutlierBlock==b.MaxOutlierBlock && a.MaxOutlierPasses==b.MaxOutlierPasses;
 
@@ -298,15 +279,20 @@ public sealed class TrajectoryEigenFilterPlugin : AsyncPositionedPipelineElement
     private double EffectiveLatencyMs() => Math.Clamp(LatencyMs,0.0,20.0);
     private double EffectiveStalenessTimeoutMs() => Math.Clamp(StalenessTimeoutMs,1.0,1000.0);
 
-    private double EffectiveLambdaCutoff()
+    private double EffectiveLambdaCutoff(double rate)
     {
-        if(!UseAdaptiveLambda) return Math.Max(0.0,LambdaCutoff);
-        double ms=EffectiveLatencyMs();
-        static double Lerp(double a,double b,double t)=>a+(b-a)*t;
-        if(ms<=2.0)return Lerp(AdaptiveLambdaAt0Ms,AdaptiveLambdaAt2Ms,ms/2.0);
-        if(ms<=5.0)return Lerp(AdaptiveLambdaAt2Ms,AdaptiveLambdaAt5Ms,(ms-2.0)/3.0);
-        if(ms<=10.0)return Lerp(AdaptiveLambdaAt5Ms,AdaptiveLambdaAt10Ms,(ms-5.0)/5.0);
-        return Lerp(AdaptiveLambdaAt10Ms,AdaptiveLambdaAt20Ms,(ms-10.0)/10.0);
+        double lambda=1.5;
+        if(UseAdaptiveLambda)
+        {
+            double ms=EffectiveLatencyMs();
+            static double Lerp(double a,double b,double t)=>a+(b-a)*t;
+            if(ms<=2)lambda=Lerp(1.50,1.20,ms/2);
+            else if(ms<=5)lambda=Lerp(1.20,1.05,(ms-2)/3);
+            else if(ms<=10)lambda=Lerp(1.05,1.04,(ms-5)/5);
+            else lambda=Lerp(1.04,1.03,Math.Min(1,(ms-10)/10));
+        }
+        double scaled=ComplexityModel.ScaleLambdaForStrength(lambda,Math.Max(0,FilterStrength));
+        return UseAdaptiveLambda?Math.Max(1.03,scaled):scaled;
     }
 
     private void AddRawHistory(Vector2 p){rawHistory.Enqueue(p);while(rawHistory.Count>256)rawHistory.Dequeue();}

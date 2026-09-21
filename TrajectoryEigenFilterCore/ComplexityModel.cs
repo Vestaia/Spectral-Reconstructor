@@ -169,16 +169,25 @@ public sealed class ComplexityModel
 
     public double AdaptiveLambdaForLookaheadSamples(int lookaheadSamples)
     {
-        double ms=Math.Max(0,lookaheadSamples)*1000.0/SampleRateHz;
         if(!settings.UseAdaptiveLambda) return settings.LambdaCutoff;
-        if(ms<=2.0)return Lerp(settings.AdaptiveLambdaAt0Ms,settings.AdaptiveLambdaAt2Ms,ms/2.0);
-        if(ms<=5.0)return Lerp(settings.AdaptiveLambdaAt2Ms,settings.AdaptiveLambdaAt5Ms,(ms-2.0)/3.0);
-        if(ms<=10.0)return Lerp(settings.AdaptiveLambdaAt5Ms,settings.AdaptiveLambdaAt10Ms,(ms-5.0)/5.0);
-        if(ms<=20.0)return Lerp(settings.AdaptiveLambdaAt10Ms,settings.AdaptiveLambdaAt20Ms,(ms-10.0)/10.0);
-        return settings.AdaptiveLambdaAt20Ms;
+        double ms=Math.Max(0,lookaheadSamples)*1000.0/SampleRateHz;
+        double lambda;
+        if(ms<=2.0)lambda=Lerp(settings.AdaptiveLambdaAt0Ms,settings.AdaptiveLambdaAt2Ms,ms/2.0);
+        else if(ms<=5.0)lambda=Lerp(settings.AdaptiveLambdaAt2Ms,settings.AdaptiveLambdaAt5Ms,(ms-2.0)/3.0);
+        else if(ms<=10.0)lambda=Lerp(settings.AdaptiveLambdaAt5Ms,settings.AdaptiveLambdaAt10Ms,(ms-5.0)/5.0);
+        else if(ms<=20.0)lambda=Lerp(settings.AdaptiveLambdaAt10Ms,settings.AdaptiveLambdaAt20Ms,(ms-10.0)/10.0);
+        else lambda=settings.AdaptiveLambdaAt20Ms;
+        return Math.Max(1.03,ScaleLambdaForStrength(lambda,settings.AdaptiveStrength));
     }
 
     static double Lerp(double a,double b,double t)=>a+(b-a)*t;
+
+    public static double ScaleLambdaForStrength(double lambda,double strength)
+    {
+        strength=Math.Max(0,strength);
+        if(strength==0)return double.PositiveInfinity;
+        return 1.0+Math.Max(0,lambda-1.0)/(strength*strength);
+    }
 
     public double SmoothAt(ReadOnlySpan<double> x,int index)
     {

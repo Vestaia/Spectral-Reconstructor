@@ -12,6 +12,8 @@ public sealed record FilterSettings
 
     public double LocalDifferenceStrength { get; init; } = 1.0;
 
+    public double AdaptiveStrength { get; init; } = 1.0;
+
     // Experimental latency-dependent hard cutoffs used when averaging repeated
     // estimates of the same physical sample.  Anchors are interpolated in ms.
     public double AdaptiveLambdaAt0Ms { get; init; } = 1.50;

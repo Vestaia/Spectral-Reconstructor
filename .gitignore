@@ -1,0 +1,5 @@
+**/bin/
+**/obj/
+TrajectoryEigenFilter.Analysis/
+TrajectoryEigenFilter.OTD/tablet*.txt
+trajectory-eigen-*.csv
