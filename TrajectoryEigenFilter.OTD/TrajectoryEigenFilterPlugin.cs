@@ -352,19 +352,42 @@ public sealed class TrajectoryEigenFilterPlugin : AsyncPositionedPipelineElement
 
         if (logCts is not null || loggingFailed) return;
 
-        string root = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "OpenTabletDriver",
-            "SpectralReconstructorLogs");
-        Directory.CreateDirectory(root);
-        string path = Path.Combine(root, $"spectral-reconstructor-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
-        logCts = new CancellationTokenSource();
-        var token = logCts.Token;
-        logTask = Task.Factory.StartNew(
-            () => LogWriterLoop(path, token),
-            token,
-            TaskCreationOptions.LongRunning,
-            TaskScheduler.Default);
+        try
+        {
+            string root = Path.Combine(GetOpenTabletDriverDataDirectory(), "SpectralReconstructorLogs");
+            Directory.CreateDirectory(root);
+            string path = Path.Combine(root, $"spectral-reconstructor-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+            logCts = new CancellationTokenSource();
+            var token = logCts.Token;
+            logTask = Task.Factory.StartNew(
+                () => LogWriterLoop(path, token),
+                token,
+                TaskCreationOptions.LongRunning,
+                TaskScheduler.Default);
+        }
+        catch (Exception ex)
+        {
+            loggingFailed = true;
+            Log.Exception(ex);
+        }
+    }
+
+    private static string GetOpenTabletDriverDataDirectory()
+    {
+        if (!OperatingSystem.IsLinux())
+            return Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "OpenTabletDriver");
+
+        string? configRoot = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME");
+        if (string.IsNullOrWhiteSpace(configRoot) || !Path.IsPathRooted(configRoot))
+        {
+            configRoot = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                ".config");
+        }
+
+        return Path.Combine(configRoot, "OpenTabletDriver");
     }
 
     private void LogWriterLoop(string path, CancellationToken token)
