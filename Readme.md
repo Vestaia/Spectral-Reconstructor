@@ -1,6 +1,8 @@
 # The Perfect Filter
 
-The Perfect Filter is an OpenTabletDriver trajectory filter and resampler. It reconstructs tablet motion in a curvature-ordered eigenbasis, retaining low-complexity motion while attenuating high-complexity input noise.
+The Perfect Filter is an OpenTabletDriver trajectory filter and resampler designed for responsive, stable cursor motion. It rejects tablet noise without conventional smoothing and reconstructs intermediate output positions from the estimated trajectory instead of merely interpolating between raw reports.
+
+Its spectral reconstruction can provide stronger noise suppression than ordinary smoothing filters at comparable latency while preserving intentional motion, including constant velocity, as an exact low-complexity trajectory.
 
 - Preserves constant-position and constant-velocity trajectories in its lowest eigenspace.
 - Supports configurable filtering strength and output latency.
@@ -136,13 +138,14 @@ Q =
 Q^{\mathsf T}Q=I
 ```
 
+The hard spectral gate retains exactly the first `K` modes:
+
 ```math
-g_k(K)
-=
-\begin{cases}
-1, & 0\le k<K\\
-0, & K\le k<N
-\end{cases}
+g_k(K)=1 \quad \text{for } 0\le k<K
+```
+
+```math
+g_k(K)=0 \quad \text{for } K\le k<N
 ```
 
 ```math
@@ -237,18 +240,7 @@ V_{K,i}
 \frac{1000r}{f_s}
 ```
 
-```math
-K_{\mathrm{base}}(r)
-=
-\begin{cases}
-12,&r=0\\
-9,&r=1\\
-8,&r=2\\
-7,&r=3\\
-6,&r=4\\
-5,&r\ge5
-\end{cases}
-```
+The adaptive base schedule is `12, 9, 8, 7, 6` modes for look-ahead values `r = 0, 1, 2, 3, 4`, respectively, and 5 modes for `r >= 5`.
 
 ```math
 K_s(r)
@@ -256,13 +248,16 @@ K_s(r)
 2+\frac{K_{\mathrm{base}}(r)-2}{s^2}
 ```
 
+At strength `s = 0`, all modes are retained:
+
 ```math
-K(r)
-=
-\begin{cases}
-N,&s=0\\
-\operatorname{clamp}_{[2,N]}\!\left(\operatorname{round}(K_s(r))\right),&s>0
-\end{cases}
+K(r)=N
+```
+
+For `s > 0`, the scaled result is rounded to the nearest integer and limited to the valid range:
+
+```math
+K(r)=\min\left(N,\max\left(2,\left\lfloor K_s(r)+\frac{1}{2}\right\rfloor\right)\right)
 ```
 
 ```math
