@@ -1,6 +1,6 @@
-# The Perfect Filter
+# A perfect filter
 
-The Perfect Filter is an OpenTabletDriver trajectory filter and resampler designed for responsive, stable cursor motion. It rejects tablet noise without conventional smoothing and reconstructs intermediate output positions from the estimated trajectory instead of merely interpolating between raw reports.
+A perfect filter is an OpenTabletDriver trajectory filter and resampler designed for responsive, stable cursor motion. It rejects tablet noise without conventional smoothing and reconstructs intermediate output positions from the estimated trajectory instead of merely interpolating between raw reports.
 
 Its spectral reconstruction can provide stronger noise suppression than ordinary smoothing filters at comparable latency while preserving intentional motion, including constant velocity, as an exact low-complexity trajectory.
 

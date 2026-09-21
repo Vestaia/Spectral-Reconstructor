@@ -11,7 +11,7 @@ using TrajectoryEigenFilterCore;
 
 namespace TrajectoryEigenFilter.OTD;
 
-[PluginName("AA The Perfect Filter")]
+[PluginName("A perfect filter")]
 public sealed class TrajectoryEigenFilterPlugin : AsyncPositionedPipelineElement<IDeviceReport>
 {
     private const float OutputFrequencyHz = 1000f; // OTD native timer path.

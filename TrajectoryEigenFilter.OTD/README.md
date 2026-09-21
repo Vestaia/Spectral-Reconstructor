@@ -1,6 +1,6 @@
-# AA The Perfect Filter – OpenTabletDriver plugin
+# A perfect filter – OpenTabletDriver plugin
 
-The Perfect Filter rejects tablet noise without conventional smoothing and reconstructs the 1000 Hz output trajectory rather than merely interpolating between raw reports. Its curvature-ordered spectral model preserves simple intentional motion while suppressing high-complexity input noise, providing strong noise reduction with responsive tracking.
+A perfect filter rejects tablet noise without conventional smoothing and reconstructs the 1000 Hz output trajectory rather than merely interpolating between raw reports. Its curvature-ordered spectral model preserves simple intentional motion while suppressing high-complexity input noise, providing strong noise reduction with responsive tracking.
 
 The plugin runs on OTD's fixed 1000 Hz output scheduler while estimating the tablet input rate independently. Filtering is performed in uniformly spaced sample-index space; report arrival timestamps are used for rate estimation and stream-reset detection rather than as acquisition timestamps.
 
