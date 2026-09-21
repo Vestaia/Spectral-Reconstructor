@@ -1,30 +1,29 @@
-# Mathematically Optimal Noise Rejection (Anti-chatter) Filter & Resampler
-This is an Open Tablet Driver plugin based on spectral filtering. Noise has roughly uniform spectral power density but intended motion does not. 
+# The Perfect Filter
 
-- Up to ~6dB noise reduction at 0 latency **without** any smoothing, averaging, or deadzones. 
-- ~10dB noise reduction with 2 sample buffer (compared to 4.77dB from a typical smoothing filter).
-- Fully configurable filter strength and latency
-- Reconstructive resampler (not interpolation), creates accurate trajectories without requiring a buffer or prediction. 
+The Perfect Filter is an OpenTabletDriver trajectory filter and resampler. It reconstructs tablet motion in a curvature-ordered eigenbasis, retaining low-complexity motion while attenuating high-complexity input noise.
+
+- Preserves constant-position and constant-velocity trajectories in its lowest eigenspace.
+- Supports configurable filtering strength and output latency.
+- Runs on OpenTabletDriver's 1000 Hz asynchronous output pipeline.
+- Uses linear extrapolation only when the output playback head is ahead of the latest tablet report.
 
 ## Usage
-Use with Open Tablet Driver 0.6.7 or newer, place the [plugin](https://github.com/Vestaia/ThePerfectFilter/releases/download/v1.0.0/AA.ThePerfectFilter.dll) at `C:\Users\<your username>\AppData\Local\OpenTabletDriver\Plugins\` and enable in your filters menu.
+Use with OpenTabletDriver 0.6.7 or newer. Download the plugin from the [latest release](https://github.com/Vestaia/ThePerfectFilter/releases/latest), place it in `C:\Users\<your username>\AppData\Local\OpenTabletDriver\Plugins\`, and enable it in the Filters settings.
+
+## License
+
+This project is licensed under the [Sustainable Use License 1.0](LICENSE.md) (`SUL-1.0`). It may be used and modified for personal, noncommercial, or internal business purposes. Redistribution must be free of charge and for noncommercial purposes.
 
 ## Parameters
 The defaults are optimized for 700hz custom Wacom firmware. I would recommend using the custom firmware if available for your tablet.
 | Parameter | Symbol | Default | Effect on output |
 |---|---:|---:|---|
 | Window duration | $T_w$ | 100 ms | Sets the amount of position history used to construct the reconstruction. Longer windows provide more temporal context and finer modal resolution, while shorter windows make the model more local in time. |
-| Maximum derivative order | $M$ | 8 | Sets maximum order for the finite differences operators used for constructing DCT eigenbasis. Maximum order influences eigenvalues. No reason to change this. |
-| Lambda cutoff | $\lambda_{\mathrm{fixed}}$ | 1.50 | Sets the maximum eigenvalue retained when adaptive lambda is disabled. Lower values retain fewer modes and reject more noise but increase reconstruction error and implicit delay. Higher values retain more modes, improving endpoint tracking at the cost of admitting more noise. |
+| Filter strength | $s$ | 1 | Inversely scales retained modes above the affine minimum. Strength 1 uses 12 modes at zero look-ahead, 0 retains all modes, and larger values retain fewer modes. |
 | Latency | $T_L$ | 5 ms | Sets how long output is delayed so that later samples can contribute to reconstruction of the reported position. Increasing latency generally permits substantially stronger noise rejection for the same trajectory accuracy. Zero latency forces reconstruction at the newest available sample. |
 | Staleness timeout | $T_S$ | 25 ms | Stops emitting output when no physical tablet report has arrived for this long. This prevents continued extrapolation when a tablet leaves its last in-range report cached after the pen is lifted. Output resumes with the next physical report. |
 | Outlier threshold | $Z_{\mathrm{outlier}}$ | 6 | Sets the threshold for rejecting isolated position deviations classified as outliers. Lower values reject smaller deviations more aggressively; higher values restrict replacement to more extreme deviations. |
-| Use adaptive lambda | $A$ | True | Selects whether the lambda cutoff changes with reconstruction latency. When enabled, low-latency estimates use higher cutoffs to reduce endpoint error while estimates with more future information use lower cutoffs for stronger noise rejection. When disabled, all estimates use $\lambda_{\mathrm{fixed}}$. |
-| Adaptive lambda, 0 ms | $\lambda_0^{A}$ | 1.50 | Sets the eigenvalue cutoff for reconstruction at the newest sample, where no future samples are available. This is the least aggressively filtered adaptive estimate because additional modes are required to reduce endpoint error. |
-| Adaptive lambda, 2 ms | $\lambda_2^{A}$ | 1.20 | Sets the adaptive cutoff at 2 ms of reconstruction latency. Cutoffs at intermediate latencies are interpolated between adjacent adaptive-lambda parameters. |
-| Adaptive lambda, 5 ms | $\lambda_5^{A}$ | 1.05 | Sets the adaptive cutoff at 5 ms of reconstruction latency. The additional future information allows a substantially lower-rank reconstruction than at the newest sample. |
-| Adaptive lambda, 10 ms | $\lambda_{10}^{A}$ | 1.04 | Sets the adaptive cutoff at 10 ms of reconstruction latency. The small reduction relative to the 5 ms cutoff reflects the diminishing benefit of additional look-ahead at this timescale. |
-| Adaptive lambda, 20 ms | $\lambda_{20}^{A}$ | 1.03 | Sets the adaptive cutoff at 20 ms of reconstruction latency. This is the lowest default adaptive cutoff and therefore the most aggressively filtered reconstruction in the default schedule. |
+| Use adaptive modes | $A$ | True | Selects whether retained mode count follows the sample-look-ahead schedule 12, 9, 8, 7, 6, then 5. The schedule is scaled by Filter strength. |
 | CSV logging | — | False | Writes filter diagnostics and position data to CSV when enabled. It does not intentionally alter the reconstructed output and is disabled by default to avoid unnecessary I/O overhead. |
 ## Filter Design
 
@@ -98,9 +97,7 @@ L_m
 ```
 
 ```math
-L =
-\sum_{m=0}^{M}
-\alpha_m L_m
+L = L_0 + \sum_{m=2}^{M} L_m
 ```
 
 ```math
@@ -140,16 +137,16 @@ Q^{\mathsf T}Q=I
 ```
 
 ```math
-g_k(\lambda_c)
+g_k(K)
 =
 \begin{cases}
-1, & \lambda_k\le\lambda_c\\
-0, & \lambda_k>\lambda_c
+1, & 0\le k<K\\
+0, & K\le k<N
 \end{cases}
 ```
 
 ```math
-G(\lambda_c)
+G(K)
 =
 \mathrm{diag}
 \left(
@@ -158,15 +155,15 @@ g_0,g_1,\ldots,g_{N-1}
 ```
 
 ```math
-P_{\lambda_c}
+P_K
 =
-QG(\lambda_c)Q^{\mathsf T}
+QG(K)Q^{\mathsf T}
 ```
 
 ```math
 \hat{\mathbf{x}}^{(N)}_t
 =
-P_{\lambda_c}\mathbf{x}^{(N)}_t
+P_K\mathbf{x}^{(N)}_t
 ```
 
 ```math
@@ -188,7 +185,7 @@ q_k[j]y_j
 ```
 
 ```math
-h_{\lambda_c,i}[j]
+h_{K,i}[j]
 =
 \sum_{k=0}^{N-1}
 g_k q_k[i]q_k[j]
@@ -198,21 +195,21 @@ g_k q_k[i]q_k[j]
 \hat{x}_i
 =
 \sum_{j=0}^{N-1}
-h_{\lambda_c,i}[j]x_j
+h_{K,i}[j]x_j
 ```
 
 ```math
 \hat{y}_i
 =
 \sum_{j=0}^{N-1}
-h_{\lambda_c,i}[j]y_j
+h_{K,i}[j]y_j
 ```
 
 ```math
-V_{\lambda_c,i}
+V_{K,i}
 =
 \left\|
-\mathbf{h}_{\lambda_c,i}
+\mathbf{h}_{K,i}
 \right\|_2^2
 ```
 
@@ -220,7 +217,7 @@ V_{\lambda_c,i}
 \frac{\sigma_{\mathrm{out}}^2}
 {\sigma_{\mathrm{in}}^2}
 =
-V_{\lambda_c,i}
+V_{K,i}
 =
 \sum_{k=0}^{N-1}
 g_k^2 q_k[i]^2
@@ -231,7 +228,7 @@ R_{\mathrm{dB}}
 =
 -10\log_{10}
 \left(
-V_{\lambda_c,i}
+V_{K,i}
 \right)
 ```
 
@@ -241,46 +238,30 @@ V_{\lambda_c,i}
 ```
 
 ```math
-\lambda_c(\tau)
-=
-\lambda_a
-+
-\frac{\tau-\tau_a}{\tau_b-\tau_a}
-\left(
-\lambda_b-\lambda_a
-\right),
-\qquad
-\tau_a\le\tau\le\tau_b
-```
-
-```math
-(\tau_a,\lambda_a),(\tau_b,\lambda_b)
-\in
-\left\{
-(0,\lambda_0^{A}),
-(2,\lambda_2^{A}),
-(5,\lambda_5^{A}),
-(10,\lambda_{10}^{A}),
-(20,\lambda_{20}^{A})
-\right\}
-```
-
-```math
-\lambda_c(\tau)
-=
-\lambda_{20}^{A},
-\qquad
-\tau\ge20
-```
-
-```math
-\lambda_c(\tau)
+K_{\mathrm{base}}(r)
 =
 \begin{cases}
-\lambda_{\mathrm{adaptive}}(\tau),
-& A=1\\
-\lambda_{\mathrm{fixed}},
-& A=0
+12,&r=0\\
+9,&r=1\\
+8,&r=2\\
+7,&r=3\\
+6,&r=4\\
+5,&r\ge5
+\end{cases}
+```
+
+```math
+K_s(r)
+=
+2+\frac{K_{\mathrm{base}}(r)-2}{s^2}
+```
+
+```math
+K(r)
+=
+\begin{cases}
+N,&s=0\\
+\operatorname{clamp}_{[2,N]}\!\left(\operatorname{round}(K_s(r))\right),&s>0
 \end{cases}
 ```
 
@@ -291,7 +272,7 @@ i_r=N-1-r
 ```math
 \mathbf{h}_r
 =
-\mathbf{h}_{\lambda_c(\tau_r),i_r}
+\mathbf{h}_{K(r),i_r}
 ```
 
 ```math

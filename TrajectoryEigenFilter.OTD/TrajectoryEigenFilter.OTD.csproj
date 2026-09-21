@@ -5,6 +5,8 @@
     <Nullable>enable</Nullable>
     <AssemblyName>AA.ThePerfectFilter</AssemblyName>
     <Version>1.0.2</Version>
+    <PackageLicenseExpression>SUL-1.0</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/Vestaia/ThePerfectFilter</RepositoryUrl>
 
     <!-- OTD supplies its own assemblies at runtime. Keep the plugin output self-contained
          as one managed plugin DLL by compiling the filter core directly into this assembly. -->
