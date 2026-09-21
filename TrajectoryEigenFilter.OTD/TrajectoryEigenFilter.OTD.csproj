@@ -3,10 +3,10 @@
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <AssemblyName>A.PerfectFilter</AssemblyName>
+    <AssemblyName>Spectral.Reconstructor</AssemblyName>
     <Version>1.1.2</Version>
     <PackageLicenseExpression>SUL-1.0</PackageLicenseExpression>
-    <RepositoryUrl>https://github.com/Vestaia/ThePerfectFilter</RepositoryUrl>
+    <RepositoryUrl>https://github.com/Vestaia/Spectral-Reconstructor</RepositoryUrl>
 
     <!-- OTD supplies its own assemblies at runtime. Keep the plugin output self-contained
          as one managed plugin DLL by compiling the filter core directly into this assembly. -->

@@ -11,7 +11,7 @@ using TrajectoryEigenFilterCore;
 
 namespace TrajectoryEigenFilter.OTD;
 
-[PluginName("A perfect filter")]
+[PluginName("A Spectral Reconstructor")]
 public sealed class TrajectoryEigenFilterPlugin : AsyncPositionedPipelineElement<IDeviceReport>
 {
     private const float OutputFrequencyHz = 1000f; // OTD native timer path.
@@ -355,9 +355,9 @@ public sealed class TrajectoryEigenFilterPlugin : AsyncPositionedPipelineElement
         string root = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "OpenTabletDriver",
-            "TrajectoryEigenFilterLogs");
+            "SpectralReconstructorLogs");
         Directory.CreateDirectory(root);
-        string path = Path.Combine(root, $"trajectory-eigen-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+        string path = Path.Combine(root, $"spectral-reconstructor-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
         logCts = new CancellationTokenSource();
         var token = logCts.Token;
         logTask = Task.Factory.StartNew(

@@ -1,4 +1,4 @@
-# A perfect filter
+# Spectral Reconstructor
 
 A semi-spectral latent space filter that performs noise rejection without smoothing.
 
@@ -8,7 +8,7 @@ A semi-spectral latent space filter that performs noise rejection without smooth
 - Resistant to both input and OTD scheduling jitter
 
 ## Usage
-Use with OpenTabletDriver 0.6.7 or newer. Download the plugin from the [latest release](https://github.com/Vestaia/ThePerfectFilter/releases/latest), place it in `C:\Users\<your username>\AppData\Local\OpenTabletDriver\Plugins\`, and enable it in the Filters settings.
+Use with OpenTabletDriver 0.6.7 or newer. Download the plugin from the [latest release](https://github.com/Vestaia/Spectral-Reconstructor/releases/latest), place it in `C:\Users\<your username>\AppData\Local\OpenTabletDriver\Plugins\`, and enable **A Spectral Reconstructor** in the Filters settings.
 
 ## License
 
