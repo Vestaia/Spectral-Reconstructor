@@ -43,7 +43,7 @@ public sealed class TrajectoryEigenFilterPlugin : AsyncPositionedPipelineElement
     private double lastModelBuildMs = double.NaN;
     private int modelSwaps;
 
-    private readonly ConcurrentQueue<string> logLines = new();
+    private readonly ConcurrentQueue<LogRow> logRows = new();
     private CancellationTokenSource? logCts;
     private Task? logTask;
     private volatile bool loggingFailed;
@@ -176,6 +176,7 @@ public sealed class TrajectoryEigenFilterPlugin : AsyncPositionedPipelineElement
             latestOutput = output;
             haveOutput = true;
             outputSequence++;
+            EnqueueOutputLogRow(now, output);
         }
         report.Position = output;
         OnEmit();
@@ -372,16 +373,16 @@ public sealed class TrajectoryEigenFilterPlugin : AsyncPositionedPipelineElement
         {
             Thread.CurrentThread.Priority = ThreadPriority.BelowNormal;
             using var w = new StreamWriter(path, false, new UTF8Encoding(false), 1 << 16);
-            w.WriteLine("sample,time_ms,raw_x,raw_y,output_x,output_y,output_minus_raw_x,output_minus_raw_y,window_had_replacement,max_outlier_score,complexity,estimated_rate_hz,model_rate_hz,window_samples,input_sequence,output_sequence,latest_input_wall_ms,evaluation_index,input_staleness_ms,stream_resets,last_output_interval_ms,model_build_active,model_build_ms,model_swaps,dropped_log_rows");
+            w.WriteLine("event_type,event_sequence,time_ms,raw_x,raw_y,output_x,output_y,output_minus_raw_x,output_minus_raw_y,window_had_replacement,max_outlier_score,complexity,estimated_rate_hz,model_rate_hz,window_samples,input_sequence,output_sequence,latest_input_wall_ms,evaluation_index,input_staleness_ms,stream_resets,last_output_interval_ms,model_build_active,model_build_ms,model_swaps,dropped_log_rows");
             while (!token.IsCancellationRequested)
             {
-                while (logLines.TryDequeue(out var line))
-                    w.WriteLine(line);
+                while (logRows.TryDequeue(out var row))
+                    w.WriteLine(FormatLogRow(row));
                 w.Flush();
                 Thread.Sleep(100);
             }
-            while (logLines.TryDequeue(out var line))
-                w.WriteLine(line);
+            while (logRows.TryDequeue(out var row))
+                w.WriteLine(FormatLogRow(row));
             w.Flush();
         }
         catch (Exception ex)
@@ -394,19 +395,122 @@ public sealed class TrajectoryEigenFilterPlugin : AsyncPositionedPipelineElement
     private void EnqueueInputLogRow(long now, Vector2 raw, FilteredWindow result)
     {
         if (logCts is null) return;
-        if (logLines.Count > 4096)
+        if (logRows.Count > 4096)
         {
             droppedLogRows++;
             return;
         }
         double maxScore = result.Replacements.Count == 0 ? 0 : result.Replacements.Max(r => r.RelativeResidualScore);
-        var c = CultureInfo.InvariantCulture;
-        string F(double v) => double.IsNaN(v) ? "NaN" : v.ToString("R", c);
-        double timeMs = now * 1000.0 / Stopwatch.Frequency;
         Vector2 o = haveOutput ? latestOutput : raw;
-        var fields = new[] { inputSequence.ToString(c), F(timeMs), F(raw.X), F(raw.Y), F(o.X), F(o.Y), F(o.X - raw.X), F(o.Y - raw.Y), result.Replacements.Count != 0 ? "1" : "0", F(maxScore), F(result.Complexity), F(estimatedRate), F(filter?.SampleRateHz ?? double.NaN), (filter?.WindowSamples ?? 0).ToString(c), inputSequence.ToString(c), outputSequence.ToString(c), F(latestInputWallMs), F(lastEvalIndex), F(lastInputStalenessMs), streamResets.ToString(c), F(lastOutputIntervalMs), modelBuildTask is not null && !modelBuildTask.IsCompleted ? "1" : "0", F(lastModelBuildMs), modelSwaps.ToString(c), droppedLogRows.ToString(c) };
-        logLines.Enqueue(string.Join(',', fields));
+        logRows.Enqueue(CreateLogRow("input", inputSequence, now, raw, o,
+            result.Replacements.Count != 0, maxScore, result.Complexity));
     }
+
+    private void EnqueueOutputLogRow(long now, Vector2 output)
+    {
+        if (logCts is null) return;
+        if (logRows.Count > 4096)
+        {
+            droppedLogRows++;
+            return;
+        }
+        logRows.Enqueue(CreateLogRow("output", outputSequence, now, latestRaw, output,
+            null, double.NaN, latestWindow?.Complexity ?? double.NaN));
+    }
+
+    private LogRow CreateLogRow(
+        string eventType,
+        long eventSequence,
+        long now,
+        Vector2 raw,
+        Vector2 output,
+        bool? windowHadReplacement,
+        double maxOutlierScore,
+        double complexity) =>
+        new(
+            eventType,
+            eventSequence,
+            now * 1000.0 / Stopwatch.Frequency,
+            raw,
+            output,
+            windowHadReplacement,
+            maxOutlierScore,
+            complexity,
+            estimatedRate,
+            filter?.SampleRateHz ?? double.NaN,
+            filter?.WindowSamples ?? 0,
+            inputSequence,
+            outputSequence,
+            latestInputWallMs,
+            lastEvalIndex,
+            lastInputStalenessMs,
+            streamResets,
+            lastOutputIntervalMs,
+            modelBuildTask is not null && !modelBuildTask.IsCompleted,
+            lastModelBuildMs,
+            modelSwaps,
+            droppedLogRows);
+
+    private static string FormatLogRow(LogRow row)
+    {
+        var c = CultureInfo.InvariantCulture;
+        string F(double value) => double.IsNaN(value) ? "NaN" : value.ToString("R", c);
+        string B(bool? value) => value.HasValue ? (value.Value ? "1" : "0") : "";
+        var fields = new[]
+        {
+            row.EventType,
+            row.EventSequence.ToString(c),
+            F(row.TimeMs),
+            F(row.Raw.X),
+            F(row.Raw.Y),
+            F(row.Output.X),
+            F(row.Output.Y),
+            F(row.Output.X - row.Raw.X),
+            F(row.Output.Y - row.Raw.Y),
+            B(row.WindowHadReplacement),
+            F(row.MaxOutlierScore),
+            F(row.Complexity),
+            F(row.EstimatedRate),
+            F(row.ModelRate),
+            row.WindowSamples.ToString(c),
+            row.InputSequence.ToString(c),
+            row.OutputSequence.ToString(c),
+            F(row.LatestInputWallMs),
+            F(row.EvaluationIndex),
+            F(row.InputStalenessMs),
+            row.StreamResets.ToString(c),
+            F(row.OutputIntervalMs),
+            row.ModelBuildActive ? "1" : "0",
+            F(row.ModelBuildMs),
+            row.ModelSwaps.ToString(c),
+            row.DroppedLogRows.ToString(c)
+        };
+        return string.Join(',', fields);
+    }
+
+    private readonly record struct LogRow(
+        string EventType,
+        long EventSequence,
+        double TimeMs,
+        Vector2 Raw,
+        Vector2 Output,
+        bool? WindowHadReplacement,
+        double MaxOutlierScore,
+        double Complexity,
+        double EstimatedRate,
+        double ModelRate,
+        int WindowSamples,
+        long InputSequence,
+        long OutputSequence,
+        double LatestInputWallMs,
+        double EvaluationIndex,
+        double InputStalenessMs,
+        long StreamResets,
+        double OutputIntervalMs,
+        bool ModelBuildActive,
+        double ModelBuildMs,
+        int ModelSwaps,
+        int DroppedLogRows);
 
     private sealed record ModelBuildResult(TrajectoryFilter Filter, FilterSettings Settings, double Rate, double Milliseconds);
 }
