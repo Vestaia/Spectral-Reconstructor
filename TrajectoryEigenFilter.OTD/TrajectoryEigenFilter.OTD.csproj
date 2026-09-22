@@ -4,7 +4,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AssemblyName>Spectral.Reconstructor</AssemblyName>
-    <Version>1.1.3</Version>
+    <Version>1.1.4</Version>
     <PackageLicenseExpression>SUL-1.0</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/Vestaia/Spectral-Reconstructor</RepositoryUrl>
 
@@ -22,4 +22,20 @@
     <Compile Include="..\TrajectoryEigenFilterCore\SymmetricEigen.cs" Link="Core\SymmetricEigen.cs" />
     <Compile Include="..\TrajectoryEigenFilterCore\TrajectoryFilter.cs" Link="Core\TrajectoryFilter.cs" />
   </ItemGroup>
+
+  <!-- Keep the locally installed OTD plugin synchronized with Release builds.
+       Set SkipLocalOtdDeploy=true to build without deploying. -->
+  <PropertyGroup Condition="'$(OS)' == 'Windows_NT' and '$(OpenTabletDriverPluginDirectory)' == ''">
+    <OpenTabletDriverPluginDirectory>$(LOCALAPPDATA)\OpenTabletDriver\Plugins\Spectral Reconstructor</OpenTabletDriverPluginDirectory>
+  </PropertyGroup>
+
+  <Target Name="DeployLocalOpenTabletDriverPlugin"
+          AfterTargets="Build"
+          Condition="'$(Configuration)' == 'Release' and '$(SkipLocalOtdDeploy)' != 'true' and Exists('$(LOCALAPPDATA)\OpenTabletDriver\Plugins')">
+    <MakeDir Directories="$(OpenTabletDriverPluginDirectory)" />
+    <Copy SourceFiles="$(TargetPath)"
+          DestinationFolder="$(OpenTabletDriverPluginDirectory)"
+          SkipUnchangedFiles="true" />
+    <Message Importance="high" Text="Deployed $(TargetFileName) to $(OpenTabletDriverPluginDirectory)" />
+  </Target>
 </Project>

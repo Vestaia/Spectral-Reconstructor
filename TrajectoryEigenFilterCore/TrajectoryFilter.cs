@@ -52,6 +52,13 @@ public sealed class TrajectoryFilter
     public bool PushAdaptiveDelayAverage(Vector2 point, int lag, out FilteredWindow result)
     {
         if (lag < 0 || lag >= Model.N) throw new ArgumentOutOfRangeException(nameof(lag));
+        // With no lookahead the ensemble contains only the ordinary endpoint
+        // estimate. Use the normal path so zero-latency output and cost are unchanged.
+        if (lag == 0)
+        {
+            if (adaptiveLag != 0) { ResetAdaptiveState(); adaptiveLag = 0; }
+            return Push(point, out result);
+        }
         if (adaptiveLag != lag)
         {
             adaptiveAccumulators.Clear(); pushedSamples = 0; adaptiveLag = lag;
@@ -86,9 +93,18 @@ public sealed class TrajectoryFilter
         if (!adaptiveAccumulators.TryGetValue(outputSequence, out var output) || output.Count < lag + 1) { result = default!; return false; }
         adaptiveAccumulators.Remove(outputSequence);
         foreach (var key in adaptiveAccumulators.Keys.Where(k => k < outputSequence).ToArray()) adaptiveAccumulators.Remove(key);
-        t0 = Stopwatch.GetTimestamp(); double complexity = Model.Complexity(x) + Model.Complexity(y); Timings.ComplexityTicks += Stopwatch.GetTimestamp() - t0;
         int targetIndex = Model.N - 1 - lag;
-        result = new FilteredWindow(new[] { output.X / output.Weight }, new[] { output.Y / output.Weight }, replaced, complexity, targetIndex); Timings.Windows++; return true;
+        // Preserve a complete reconstructed trajectory for fractional playback and
+        // extrapolation. The final-lookahead K defines its shape; translate it so
+        // the delayed target agrees with the inverse-variance ensemble estimate.
+        t0 = Stopwatch.GetTimestamp();
+        var sx = Model.Smooth(x); var sy = Model.Smooth(y);
+        double dx = output.X / output.Weight - sx[targetIndex];
+        double dy = output.Y / output.Weight - sy[targetIndex];
+        for (int i = 0; i < Model.N; i++) { sx[i] += dx; sy[i] += dy; }
+        Timings.ReconstructionTicks += Stopwatch.GetTimestamp() - t0;
+        t0 = Stopwatch.GetTimestamp(); double complexity = Model.Complexity(x) + Model.Complexity(y); Timings.ComplexityTicks += Stopwatch.GetTimestamp() - t0;
+        result = new FilteredWindow(sx, sy, replaced, complexity); Timings.Windows++; return true;
     }
     sealed class AdaptiveEstimateAccumulator { public double X, Y, Weight; public int Count; }
     readonly record struct AdaptiveKernel(double[] Kernel, double Weight);

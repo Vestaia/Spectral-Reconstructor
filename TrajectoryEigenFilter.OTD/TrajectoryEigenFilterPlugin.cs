@@ -23,7 +23,7 @@ public sealed class TrajectoryEigenFilterPlugin : AsyncPositionedPipelineElement
     private long inputSequence, outputSequence;
     private long lastArrivalTicks, lastOutputTicks, rateAnchorTicks, rateAnchorSequence;
     private double estimatedRate = 700.0, lastOutputIntervalMs = double.NaN;
-    private bool rateInitialized, schedulerInitialized;
+    private bool rateInitialized;
     private int stableRateWindows;
     private double rateErrorEma;
 
@@ -52,13 +52,15 @@ public sealed class TrajectoryEigenFilterPlugin : AsyncPositionedPipelineElement
 
     public override PipelinePosition Position => PipelinePosition.PreTransform;
 
-    [Property("Resampling frequency"), Unit("Hz"), DefaultPropertyValue(1000.0f), ToolTip("Output frequency used in async mode.\nDefault: 1000 Hz. Recommended: 125, 250, 500, or 1000 Hz, as required by the selected OTD scheduling mode.")]
+    [Property("Resampling frequency"), Unit("Hz"), DefaultPropertyValue(1000.0f), ToolTip("Output frequency used in async mode.\nDefault: 1000 Hz. Recommended: 125, 250, 500, or 1000 Hz to use OTD's native timer. Other values use OTD's fallback timer.")]
     public new float Frequency
     {
         get => resamplingFrequencyHz;
         set
         {
-            resamplingFrequencyHz = Math.Clamp(value, 1f, 4000f);
+            resamplingFrequencyHz = float.IsFinite(value)
+                ? Math.Clamp(value, 1f, 4000f)
+                : DefaultOutputFrequencyHz;
             base.Frequency = resamplingFrequencyHz;
         }
     }
@@ -106,7 +108,6 @@ public sealed class TrajectoryEigenFilterPlugin : AsyncPositionedPipelineElement
         lock (gate)
         {
             long now = Stopwatch.GetTimestamp();
-            EnsureSchedulerConfigured();
             if (!rateInitialized)
             {
                 estimatedRate = 700.0;
@@ -127,8 +128,14 @@ public sealed class TrajectoryEigenFilterPlugin : AsyncPositionedPipelineElement
             EnsureFilterNonBlocking();
             TryFinishModelBuild();
 
-            if (filter is not null && filter.Push(report.Position, out var result))
-                latestWindow = result;
+            if (filter is not null)
+            {
+                int lag = Math.Min(EffectiveLatencySamples(), Math.Max(0, filter.WindowSamples - 2));
+                bool ready = activeSettings?.UseAdaptiveModes == true
+                    ? filter.PushAdaptiveDelayAverage(report.Position, lag, out var result)
+                    : filter.Push(report.Position, out result);
+                if (ready) latestWindow = result;
+            }
 
             UpdateLoggingState();
             if (latestWindow is not null) EnqueueInputLogRow(now, report.Position, latestWindow);
@@ -150,7 +157,6 @@ public sealed class TrajectoryEigenFilterPlugin : AsyncPositionedPipelineElement
         Vector2 output;
         lock (gate)
         {
-            EnsureSchedulerConfigured();
             TryFinishModelBuild();
             long now = Stopwatch.GetTimestamp();
 
@@ -194,17 +200,6 @@ public sealed class TrajectoryEigenFilterPlugin : AsyncPositionedPipelineElement
         }
         report.Position = output;
         OnEmit();
-    }
-
-    private void EnsureSchedulerConfigured()
-    {
-        if (schedulerInitialized) return;
-        try
-        {
-            base.Frequency = resamplingFrequencyHz;
-            schedulerInitialized = true;
-        }
-        catch (NullReferenceException) { /* OTD initializes the timer after construction. */ }
     }
 
     private bool IsStreamDiscontinuity(long now)
