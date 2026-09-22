@@ -23,19 +23,4 @@
     <Compile Include="..\TrajectoryEigenFilterCore\TrajectoryFilter.cs" Link="Core\TrajectoryFilter.cs" />
   </ItemGroup>
 
-  <!-- Keep the locally installed OTD plugin synchronized with Release builds.
-       Set SkipLocalOtdDeploy=true to build without deploying. -->
-  <PropertyGroup Condition="'$(OS)' == 'Windows_NT' and '$(OpenTabletDriverPluginDirectory)' == ''">
-    <OpenTabletDriverPluginDirectory>$(LOCALAPPDATA)\OpenTabletDriver\Plugins\Spectral Reconstructor</OpenTabletDriverPluginDirectory>
-  </PropertyGroup>
-
-  <Target Name="DeployLocalOpenTabletDriverPlugin"
-          AfterTargets="Build"
-          Condition="'$(Configuration)' == 'Release' and '$(SkipLocalOtdDeploy)' != 'true' and Exists('$(LOCALAPPDATA)\OpenTabletDriver\Plugins')">
-    <MakeDir Directories="$(OpenTabletDriverPluginDirectory)" />
-    <Copy SourceFiles="$(TargetPath)"
-          DestinationFolder="$(OpenTabletDriverPluginDirectory)"
-          SkipUnchangedFiles="true" />
-    <Message Importance="high" Text="Deployed $(TargetFileName) to $(OpenTabletDriverPluginDirectory)" />
-  </Target>
 </Project>
