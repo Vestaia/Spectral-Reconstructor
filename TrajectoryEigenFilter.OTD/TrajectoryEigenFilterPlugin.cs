@@ -14,7 +14,7 @@ namespace TrajectoryEigenFilter.OTD;
 [PluginName("A Spectral Reconstructor")]
 public sealed class TrajectoryEigenFilterPlugin : AsyncPositionedPipelineElement<IDeviceReport>
 {
-    private const float OutputFrequencyHz = 1000f; // OTD native timer path.
+    private const float DefaultOutputFrequencyHz = 1000f;
     private readonly object gate = new();
     private TrajectoryFilter? filter;
     private FilterSettings? activeSettings;
@@ -48,17 +48,23 @@ public sealed class TrajectoryEigenFilterPlugin : AsyncPositionedPipelineElement
     private Task? logTask;
     private volatile bool loggingFailed;
     private int droppedLogRows;
+    private float resamplingFrequencyHz = DefaultOutputFrequencyHz;
 
     public override PipelinePosition Position => PipelinePosition.PreTransform;
 
-    // OTD scheduler is always 1000 Hz. This remains an implementation detail;
-    // EnsureScheduler1000Hz applies it after OTD initializes the base timer.
-    [DefaultPropertyValue(1000.0)]
+    [Property("Resampling frequency"), Unit("Hz"), DefaultPropertyValue(1000.0f), ToolTip("Output frequency used in async mode.\nDefault: 1000 Hz. Recommended: 125, 250, 500, or 1000 Hz, as required by the selected OTD scheduling mode.")]
     public new float Frequency
     {
-        get => base.Frequency;
-        set => base.Frequency = OutputFrequencyHz;
+        get => resamplingFrequencyHz;
+        set
+        {
+            resamplingFrequencyHz = Math.Clamp(value, 1f, 4000f);
+            base.Frequency = resamplingFrequencyHz;
+        }
     }
+
+    [BooleanProperty("Enable async mode", "Resamples output on OTD's scheduler instead of emitting only on tablet reports."), DefaultPropertyValue(true), ToolTip("Emits reconstructed positions at the configured Resampling frequency. When disabled, one reconstructed output is emitted for each tablet report.\nDefault: On. Recommended: On for resampling.")]
+    public bool EnableAsyncMode { get; set; } = true;
 
     [Property("Window duration"), Unit("ms"), DefaultPropertyValue(100.0), ToolTip("Trajectory history used by the filter.\nDefault: 100 ms. Recommended: 70-150 ms.\n100 ms was used for current tuning; larger windows cost more model-build CPU and memory.")]
     public double WindowMilliseconds { get; set; } = 100.0;
@@ -100,7 +106,7 @@ public sealed class TrajectoryEigenFilterPlugin : AsyncPositionedPipelineElement
         lock (gate)
         {
             long now = Stopwatch.GetTimestamp();
-            EnsureScheduler1000Hz();
+            EnsureSchedulerConfigured();
             if (!rateInitialized)
             {
                 estimatedRate = 700.0;
@@ -127,16 +133,24 @@ public sealed class TrajectoryEigenFilterPlugin : AsyncPositionedPipelineElement
             UpdateLoggingState();
             if (latestWindow is not null) EnqueueInputLogRow(now, report.Position, latestWindow);
         }
-        // Positioned async elements emit from UpdateState at the fixed OTD timer rate.
+
+        if (!EnableAsyncMode)
+            EmitCurrentState();
     }
 
     protected override void UpdateState()
+    {
+        if (!EnableAsyncMode) return;
+        EmitCurrentState();
+    }
+
+    private void EmitCurrentState()
     {
         if (State is not ITabletReport report) return;
         Vector2 output;
         lock (gate)
         {
-            EnsureScheduler1000Hz();
+            EnsureSchedulerConfigured();
             TryFinishModelBuild();
             long now = Stopwatch.GetTimestamp();
 
@@ -182,12 +196,12 @@ public sealed class TrajectoryEigenFilterPlugin : AsyncPositionedPipelineElement
         OnEmit();
     }
 
-    private void EnsureScheduler1000Hz()
+    private void EnsureSchedulerConfigured()
     {
         if (schedulerInitialized) return;
         try
         {
-            base.Frequency = OutputFrequencyHz;
+            base.Frequency = resamplingFrequencyHz;
             schedulerInitialized = true;
         }
         catch (NullReferenceException) { /* OTD initializes the timer after construction. */ }

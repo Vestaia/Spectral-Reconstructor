@@ -4,7 +4,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AssemblyName>Spectral.Reconstructor</AssemblyName>
-    <Version>1.1.2</Version>
+    <Version>1.1.3</Version>
     <PackageLicenseExpression>SUL-1.0</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/Vestaia/Spectral-Reconstructor</RepositoryUrl>
 
