@@ -7,6 +7,8 @@ A semi-spectral latent space filter that performs noise rejection without smooth
 - Zero-latency mode while still achieving modest noise rejection (~50%).
 - Resistant to both input and OTD scheduling jitter
 
+![Raw tablet input compared with the reconstructed output](docs/raw-vs-filtered.png)
+
 ## Usage
 Use with OpenTabletDriver 0.6.7 or newer. Download the plugin from the [latest release](https://github.com/Vestaia/Spectral-Reconstructor/releases/latest), place it in `C:\Users\<your username>\AppData\Local\OpenTabletDriver\Plugins\`, and enable **A Spectral Reconstructor** in the Filters settings.
 

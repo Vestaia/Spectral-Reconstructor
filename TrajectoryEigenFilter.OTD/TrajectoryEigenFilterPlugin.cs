@@ -23,7 +23,7 @@ public sealed class TrajectoryEigenFilterPlugin : AsyncPositionedPipelineElement
     private long inputSequence, outputSequence;
     private long lastArrivalTicks, lastOutputTicks, rateAnchorTicks, rateAnchorSequence;
     private double estimatedRate = 700.0, lastOutputIntervalMs = double.NaN;
-    private bool rateInitialized;
+    private bool rateInitialized, acquiringStartupRate;
     private int stableRateWindows;
     private double rateErrorEma;
 
@@ -96,6 +96,7 @@ public sealed class TrajectoryEigenFilterPlugin : AsyncPositionedPipelineElement
     private const double RateTransitionFraction = 0.10;
     private const int RateEstimateMinimumSamples = 256;
     private const double RateEstimateMinimumSeconds = 0.35;
+    private const int StartupRateMinimumSamples = 4;
     private const int StableRateWindowsBeforeRebuild = 2;
 
     protected override void ConsumeState()
@@ -206,8 +207,7 @@ public sealed class TrajectoryEigenFilterPlugin : AsyncPositionedPipelineElement
     {
         if (lastArrivalTicks == 0) return true;
         double gapMs = (now - lastArrivalTicks) * 1000.0 / Stopwatch.Frequency;
-        double thresholdMs = Math.Max(25.0, 5000.0 / Math.Max(30.0, estimatedRate));
-        return gapMs > thresholdMs;
+        return gapMs >= EffectiveStalenessTimeoutMs();
     }
 
     private void ResetStream(Vector2 firstPosition, long now)
@@ -221,6 +221,7 @@ public sealed class TrajectoryEigenFilterPlugin : AsyncPositionedPipelineElement
         latestWindow = null;
         rateAnchorTicks = now;
         rateAnchorSequence = inputSequence;
+        acquiringStartupRate = true;
         stableRateWindows = 0;
         rateErrorEma = 0;
         streamResets++;
@@ -318,6 +319,27 @@ public sealed class TrajectoryEigenFilterPlugin : AsyncPositionedPipelineElement
         }
         long count = inputSequence - rateAnchorSequence;
         double elapsed = (now - rateAnchorTicks) / (double)Stopwatch.Frequency;
+
+        if (acquiringStartupRate)
+        {
+            // After a pen lift, acquire the new report rate over one staleness
+            // interval. Subsequent updates return to the slower, jitter-resistant
+            // steady-state estimator below.
+            double startupSeconds = EffectiveStalenessTimeoutMs() / 1000.0;
+            if (count < StartupRateMinimumSamples || elapsed < startupSeconds) return;
+            double startupRate = count / elapsed;
+            if (startupRate is >= 30 and <= 4000)
+            {
+                estimatedRate = Math.Clamp(startupRate, 30, 4000);
+                acquiringStartupRate = false;
+                stableRateWindows = StableRateWindowsBeforeRebuild;
+                rateErrorEma = 0;
+            }
+            rateAnchorTicks = now;
+            rateAnchorSequence = inputSequence;
+            return;
+        }
+
         if (count < RateEstimateMinimumSamples || elapsed < RateEstimateMinimumSeconds) return;
         double observed = count / elapsed;
         if (observed is < 30 or > 4000)
