@@ -14,7 +14,7 @@ Use with OpenTabletDriver 0.6.7 or newer. Download the plugin from the [latest r
 
 ## License
 
-This project is licensed under the [Sustainable Use License 1.0](LICENSE.md) (`SUL-1.0`). It may be used and modified for personal, noncommercial, or internal business purposes. Redistribution must be free of charge and for noncommercial purposes.
+This project is licensed under the [Sustainable Use License 1.0](LICENSE.md) (`SUL-1.0`). It may be used and modified for personal, noncommercial, or internal business purposes. Redistribution must be free of charge and for noncommercial purposes. For licensing to use in commercial products, contact me at vestaia.us@gmail.com
 
 ## Parameters
 The defaults are optimized for 700hz custom Wacom firmware. I would recommend using the custom firmware if available for your tablet.
